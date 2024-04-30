@@ -3,12 +3,17 @@ import torch.nn as nn
 import torch.nn.functional as F
 from base_bert import BertPreTrainedModel
 from utils import *
+import math
 
 
 class BertSelfAttention(nn.Module):
   def __init__(self, config):
     super().__init__()
 
+    # JPL
+    # Mapping with the DFP guidelines
+    # config.hidden_size = d
+    # config.num_attention_heads = n
     self.num_attention_heads = config.num_attention_heads
     self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
     self.all_head_size = self.num_attention_heads * self.attention_head_size
@@ -50,8 +55,22 @@ class BertSelfAttention(nn.Module):
     #   [bs, seq_len, num_attention_heads * attention_head_size = hidden_size].
 
     ### TODO
-    raise NotImplementedError
-
+    # Argument to softmax: multiplying query and key and scaling it
+    bs, n, seq_len, d_n = key.shape
+    # Create the softmax argument for each sequence element t
+    # We effect a matrix product on [SeqL X d_n] X [d_n X SeqL]
+    # which corresponds to W_i^q h_j dot W_i^k h_t / sqrt(d / n)
+    s = torch.matmul(query, key.transpose(-1, -2)) / (math.sqrt(d_n))
+    # Apply attention_mask
+    s.masked_fill(attention_mask == 0, float('-inf'))
+    # Normalize with softmax along the last dimension
+    S = torch.softmax(s, dim=-1)              # This keeps same dimensions
+    # Multiply attention scores with the value to get back weighted values
+    S = torch.matmul(S, value)
+    # Concatenate along the head dimension to obtain desired dimensions
+    S = S.transpose(1, 2)
+    S = S.contiguous().view(bs, seq_len, int(n*d_n))
+    return S
 
   def forward(self, hidden_states, attention_mask):
     """
@@ -99,8 +118,11 @@ class BertLayer(nn.Module):
     # Hint: Remember that BERT applies dropout to the transformed output of each sub-layer,
     # before it is added to the sub-layer input and normalized with a layer norm.
     ### TODO
-    raise NotImplementedError
-
+    out_dense = dense_layer(output)
+    out_dense_dropped = dropout(out_dense)
+    out_add = input + out_dense_dropped
+    out = ln_layer(out_add)
+    return out
 
   def forward(self, hidden_states, attention_mask):
     """
@@ -113,7 +135,16 @@ class BertLayer(nn.Module):
     4. An add-norm operation that takes the input and output of the feed forward layer.
     """
     ### TODO
-    raise NotImplementedError
+    # We are building here a BERT layer architecture from the ground up
+    # 1st piece: Create multi head self attention
+    MH = self.self_attention(hidden_states, attention_mask)
+    # 2nd piece: add + normalize
+    LN = self.add_norm(hidden_states, MH, self.attention_dense, self.attention_dropout, self.attention_layer_norm)
+    # 3rd piece: send into feed forward network
+    SA = self.interm_af(self.interm_dense(LN))
+    out = self.add_norm(hidden_states, SA, self.out_dense, self.out_dropout, self.out_layer_norm)
+    return out
+
 
 
 
@@ -150,31 +181,33 @@ class BertModel(BertPreTrainedModel):
     self.init_weights()
 
   def embed(self, input_ids):
-    input_shape = input_ids.size()
-    seq_length = input_shape[1]
+      input_shape = input_ids.size()
+      seq_length = input_shape[1]
 
-    # Get word embedding from self.word_embedding into input_embeds.
-    inputs_embeds = None
-    ### TODO
-    raise NotImplementedError
+      # Get word embedding from self.word_embedding into input_embeds.
+      inputs_embeds = None
+      ### TODO
+      inputs_embeds = self.word_embedding(input_ids)
+
+      # Use pos_ids to get position embedding from self.pos_embedding into pos_embeds.
+      pos_ids = self.position_ids[:, :seq_length]
+      pos_embeds = None
+      ### TODO
+      pos_embeds = self.pos_embedding(pos_ids)
 
 
-    # Use pos_ids to get position embedding from self.pos_embedding into pos_embeds.
-    pos_ids = self.position_ids[:, :seq_length]
-    pos_embeds = None
-    ### TODO
-    raise NotImplementedError
+      # Get token type ids. Since we are not considering token type, this embedding is
+      # just a placeholder.
+      tk_type_ids = torch.zeros(input_shape, dtype=torch.long, device=input_ids.device)
+      tk_type_embeds = self.tk_type_embedding(tk_type_ids)
 
+      # Add three embeddings together; then apply embed_layer_norm and dropout and return.
+      ### TODO
+      my_embeddings = inputs_embeds + pos_embeds + tk_type_embeds
+      my_embeddings = self.embed_layer_norm(my_embeddings)
+      my_embeddings = self.embed_dropout(my_embeddings)
 
-    # Get token type ids. Since we are not considering token type, this embedding is
-    # just a placeholder.
-    tk_type_ids = torch.zeros(input_shape, dtype=torch.long, device=input_ids.device)
-    tk_type_embeds = self.tk_type_embedding(tk_type_ids)
-
-    # Add three embeddings together; then apply embed_layer_norm and dropout and return.
-    ### TODO
-    raise NotImplementedError
-
+      return my_embeddings
 
   def encode(self, hidden_states, attention_mask):
     """
