@@ -62,12 +62,12 @@ class BertSelfAttention(nn.Module):
     # which corresponds to W_i^q h_j dot W_i^k h_t / sqrt(d / n)
     s = torch.matmul(query, key.transpose(-1, -2)) / (math.sqrt(d_n))
     # Apply attention_mask
-    s.masked_fill(attention_mask == 0, float('-inf'))
+    s.masked_fill_(attention_mask == 0, float('-inf'))
     # Normalize with softmax along the last dimension
     S = torch.softmax(s, dim=-1)              # This keeps same dimensions
     # Multiply attention scores with the value to get back weighted values
     S = torch.matmul(S, value)
-    # Concatenate along the head dimension to obtain desired dimensions
+    # Concatenate along the number of heads n dimension to obtain desired dimensions
     S = S.transpose(1, 2)
     S = S.contiguous().view(bs, seq_len, int(n*d_n))
     return S
@@ -204,10 +204,10 @@ class BertModel(BertPreTrainedModel):
       # Add three embeddings together; then apply embed_layer_norm and dropout and return.
       ### TODO
       my_embeddings = inputs_embeds + pos_embeds + tk_type_embeds
-      my_embeddings = self.embed_layer_norm(my_embeddings)
-      my_embeddings = self.embed_dropout(my_embeddings)
+      emb_n = self.embed_layer_norm(my_embeddings)
+      emb_n_drop = self.embed_dropout(emb_n)
 
-      return my_embeddings
+      return emb_n_drop
 
   def encode(self, hidden_states, attention_mask):
     """
