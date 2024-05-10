@@ -54,7 +54,6 @@ class BertSelfAttention(nn.Module):
         # - Before returning, concatenate multi-heads to recover the original shape:
         #   [bs, seq_len, num_attention_heads * attention_head_size = hidden_size].
 
-        ### TODO
         # Argument to softmax: multiplying query and key and scaling it
         bs, n, seq_len, d_n = key.shape
         # Create the softmax argument for each sequence element t
@@ -117,7 +116,6 @@ class BertLayer(nn.Module):
         """
         # Hint: Remember that BERT applies dropout to the transformed output of each sub-layer,
         # before it is added to the sub-layer input and normalized with a layer norm.
-        ### TODO
         out_dense = dense_layer(output)
         out_dense_dropped = dropout(out_dense)
         out_add = input + out_dense_dropped
@@ -134,7 +132,6 @@ class BertLayer(nn.Module):
         3. A feed forward layer.
         4. An add-norm operation that takes the input and output of the feed forward layer.
         """
-        ### TODO
         # We are building here a BERT layer architecture from the ground up
         # 1st piece: Create multi head self attention
         MH = self.self_attention(hidden_states, attention_mask)
@@ -185,13 +182,11 @@ class BertModel(BertPreTrainedModel):
 
         # Get word embedding from self.word_embedding into input_embeds.
         inputs_embeds = None
-        ### TODO
         inputs_embeds = self.word_embedding(input_ids)
 
         # Use pos_ids to get position embedding from self.pos_embedding into pos_embeds.
         pos_ids = self.position_ids[:, :seq_length]
         pos_embeds = None
-        ### TODO
         pos_embeds = self.pos_embedding(pos_ids)
 
         # Get token type ids. Since we are not considering token type, this embedding is
@@ -200,7 +195,6 @@ class BertModel(BertPreTrainedModel):
         tk_type_embeds = self.tk_type_embedding(tk_type_ids)
 
         # Add three embeddings together; then apply embed_layer_norm and dropout and return.
-        ### TODO
         my_embeddings = inputs_embeds + pos_embeds + tk_type_embeds
         emb_n = self.embed_layer_norm(my_embeddings)
         emb_n_drop = self.embed_dropout(emb_n)
